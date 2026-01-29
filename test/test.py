@@ -1,37 +1,54 @@
+import cocotb
+from cocotb.triggers import Timer
+
 @cocotb.test()
 async def test_d_latch(dut):
-    dut._log.info("Start D latch test")
+    dut._log.info("Starting D latch test")
 
-    clock = Clock(dut.clk, 10, units="us")
-    cocotb.start_soon(clock.start())
-
-    # Reset
+    # Tiny Tapeout required signals
     dut.ena.value = 1
-    dut.ui_in.value = 0
     dut.uio_in.value = 0
-    dut.rst_n.value = 0
-    await ClockCycles(dut.clk, 5)
-    dut.rst_n.value = 1
+    dut.rst_n.value = 1   # reset not used in your design
 
     d = dut.ui_in[0]
     e = dut.ui_in[1]
     q = dut.uo_out[0]
 
-    # Case 1: Enable = 1, D = 1 → Q should follow
+    # -----------------------------
+    # 1️⃣ Enable HIGH → Q follows D
+    # -----------------------------
     e.value = 1
-    d.value = 1
-    await Timer(1, units="us")
-    assert q.value == 1, "Latch failed to pass D=1 when enabled"
 
-    # Case 2: Enable = 1, D = 0 → Q should follow
     d.value = 0
-    await Timer(1, units="us")
-    assert q.value == 0, "Latch failed to pass D=0 when enabled"
+    await Timer(1, units="ns")
+    assert q.value == 0, "Q should follow D=0 when E=1"
 
-    # Case 3: Disable latch, change D → Q should hold
-    e.value = 0
     d.value = 1
-    await Timer(1, units="us")
-    assert q.value == 0, "Latch did not hold value when disabled"
+    await Timer(1, units="ns")
+    assert q.value == 1, "Q should follow D=1 when E=1"
+
+    # -----------------------------
+    # 2️⃣ Disable latch → Q holds
+    # -----------------------------
+    e.value = 0
+
+    d.value = 0   # change D, but latch disabled
+    await Timer(1, units="ns")
+    assert q.value == 1, "Q should HOLD previous value when E=0"
+
+    d.value = 1
+    await Timer(1, units="ns")
+    assert q.value == 1, "Q should still HOLD when E=0"
+
+    # -----------------------------
+    # 3️⃣ Re-enable → Q updates again
+    # -----------------------------
+    e.value = 1
+    await Timer(1, units="ns")
+    assert q.value == 1, "Q should update when E goes high"
+
+    d.value = 0
+    await Timer(1, units="ns")
+    assert q.value == 0, "Q should follow D again when enabled"
 
     dut._log.info("D latch test PASSED")
